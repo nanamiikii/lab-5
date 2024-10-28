@@ -7,7 +7,6 @@ embed-resources: true
 code-fold: true 
 theme: "darkly"
 message: true
-
 ---
 
 For this lab, you will be joining and filtering related datasets to solve a murder mystery!
@@ -58,16 +57,135 @@ Detective Wickham reaches out to you...
 
 > A crime has taken place and I need your help! There was a murder in SQL City sometime on January 15, 2018. Could you retrieve the crime scene report from the police department’s database and follow the clues to find the person responsible for the murder?!
 
-```{r}
-#| label: inspecting-crime-scene-report
-
-```
-
-
 **Follow the evidence to the person responsible for the murder, building a report as you go.**
 Hint: Make sure you check for interviews with any suspects!
 
+```{r}
+#| label: inspecting-crime-scene-report
+
+#sorting the crime scene report for just data from 01.15.2018 in SQL City, keeping the date a double for now...
+#also selecting the description to get a better hint
+crime_scene_report |>
+      filter(city == "SQL City", type == "murder", date == 20180115) |>
+      select(description)
+```
+#### selecting the witnesses from 'person' 
+
+```{r}
+#| label: selecting the witnesses
+witnesses <- person |> #first witness criteria | second witness criteria
+             filter((address_street_name == "Northwestern Dr" & address_number == max(address_number)) |
+                    (str_detect(name, "Annabel") & address_street_name == "Franklin Ave"))
+
+witnesses
+```
+
+#### looking at their interviews
+```{r}
+#using personid/id, join their interview information onto witness using a right join 
+
+witnesses |>
+      left_join(interview, by = c("id" = "person_id")) |>
+      pull(name, transcript)
+
+```
+
+What we know about the murderer currently:
+
+~~~~
+- (supposedly) they went to Annabel's gym on January 9 
+- Get Fit Now Gym membership number started with 48Z, gold member of gym
+- Car license plate contains 'H42W'
+~~~~
+
+#### Does Annabel go to Get Fit Now?
+```{r}
+#selecting the 2nd row (Annabel's row) and checking if her name is in the member list of get fit now.
+str_detect(witnesses[2,]$name, str_subset(get_fit_now_member$name, "Annabel"))
+```
+#### Did Annabel go on January 9? 
+```{r}
+#https://chatgpt.com/share/671e94f0-a1a0-8013-9445-77d9eafda394
+
+annabel_gym_checkin <- get_fit_now_member |>
+                       filter(name == witnesses[2,]$name) |>
+                       inner_join(get_fit_now_check_in, by = c("id" = "membership_id"))
+
+annabel_gym_checkin
+```
+
+since Annabel is a member of Get Fit Now, and did in fact check in on January 9, we also have the time she was there. This is useful information as we can narrow down who satisfies the following: 
+
+~~~~
+- Get Fit Now Membership id: starts with '48Z'
+- Get Fit Now Membership status: Gold
+- Was at Get Fit Now between 16:00 - 17:00
+- Was at Get Fit Now on January 9, 2018
+- Car License plate contains 'H42W'
+~~~~
+
+#### Using the information we know about Get Fit Now, narrow it down. 
+```{r}
+#https://chatgpt.com/share/671f0318-e2d4-8013-adf9-b22360032e44
+
+#filtering the data
+suspects <- get_fit_now_member |>
+            filter(str_starts(id, "48Z"), membership_status == "gold") |> 
+            left_join(get_fit_now_check_in, by = c("id" = "membership_id")) |>
+            left_join(person, by = c("person_id" = "id")) |>
+            left_join(drivers_license, join_by("license_id" == "id")) |>
+            filter(str_detect(plate_number, "H42W"), if_all(everything(), ~ !is.na(.)))
+
+suspects
+
+```
+
+Prime suspect = Jeremy Bowers, but should check what he has to say...
+
+#### Suspect Interviews...
+```{r}
+interview |>
+      filter(person_id == suspects$person_id) |>
+      pull(transcript)
+    
+```
+So from Jeremy, we got: 
+
+~~~~
+- income = high 
+- gender = female
+- hair color = red
+- height = 65-67, 
+- hair color = red, 
+- car make = Tesla
+- car model = Model S
+- Went to SQL Symphony concert 3 times in 12/2017 (201712--)
+~~~~
+
+#### Let's find that woman...
+```{r}
+findingFemales <- drivers_license |>
+                  filter(
+                         65 <= height & height <= 67, 
+                         hair_color == "red", 
+                         gender == "female", 
+                         car_make == "Tesla", 
+                         car_model == "Model S") |>
+                  left_join(person, by = c("id" = "license_id")) |>
+                  left_join(income, by = "ssn") |>
+                  select(person_id = id.y, name, annual_income)
+
+facebook_event_checkin |>
+      filter(event_name == "SQL Symphony Concert", str_starts(date, "201712")) |>
+      group_by(person_id) |>
+      summarize(checkIns = n()) |>
+      right_join(findingFemales, by = "person_id") |>
+      filter(checkIns == 3, if_all(everything(), ~ !is.na(.)))
+```
+
+So the full story: Miranda Priestly hired Jeremy Bowers to kill the person.The brain behind the murder is Miranda and the actual person who committed the murder is Jeremy. 
 
 ## And the final suspect is...
 
-*Put the name of the person responsible for the murder here:*
+*Miranda Priestly? She was behind it all but Jeremy Bowers was the hitman so... Both to jail they go!*
+
