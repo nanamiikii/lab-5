@@ -72,7 +72,8 @@ crime_scene_report |>
 #### selecting the witnesses from 'person' 
 
 ```{r}
-#| label: selecting the witnesses
+#| label: selecting-the-witnesses
+
 witnesses <- person |> #first witness criteria | second witness criteria
              filter((address_street_name == "Northwestern Dr" & address_number == max(address_number)) |
                     (str_detect(name, "Annabel") & address_street_name == "Franklin Ave"))
@@ -82,6 +83,7 @@ witnesses
 
 #### looking at their interviews
 ```{r}
+#|label: checking-witnesses
 #using personid/id, join their interview information onto witness using a right join 
 
 witnesses |>
@@ -100,11 +102,15 @@ What we know about the murderer currently:
 
 #### Does Annabel go to Get Fit Now?
 ```{r}
+#| label: Annabel-gym-check
+
 #selecting the 2nd row (Annabel's row) and checking if her name is in the member list of get fit now.
 str_detect(witnesses[2,]$name, str_subset(get_fit_now_member$name, "Annabel"))
 ```
 #### Did Annabel go on January 9? 
 ```{r}
+#| label: Annabel-Gym-Time
+
 #https://chatgpt.com/share/671e94f0-a1a0-8013-9445-77d9eafda394
 
 annabel_gym_checkin <- get_fit_now_member |>
@@ -126,6 +132,7 @@ since Annabel is a member of Get Fit Now, and did in fact check in on January 9,
 
 #### Using the information we know about Get Fit Now, narrow it down. 
 ```{r}
+#|label: Get-Fit-Now-suspects
 #https://chatgpt.com/share/671f0318-e2d4-8013-adf9-b22360032e44
 
 #filtering the data
@@ -144,6 +151,8 @@ Prime suspect = Jeremy Bowers, but should check what he has to say...
 
 #### Suspect Interviews...
 ```{r}
+#| label: interview-suspects
+
 interview |>
       filter(person_id == suspects$person_id) |>
       pull(transcript)
@@ -164,6 +173,8 @@ So from Jeremy, we got:
 
 #### Let's find that woman...
 ```{r}
+#|label: finding-the-hirer
+
 findingFemales <- drivers_license |>
                   filter(
                          65 <= height & height <= 67, 
